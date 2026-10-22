@@ -1,0 +1,21 @@
+apiVersion: asset.sap/v1
+kind: Asset
+type: mcp-server
+
+metadata:
+  name: sap-s4-business-partner-mcp-server
+  description: Exposes SAP S/4HANA Business Partner API as read-only MCP tools for vendor name, payment terms, and blocking status retrieval
+  version: "1.0.0"
+  translation: mcp-translation/translation.json
+  apiSpec: mcp-translation/api-spec.edmx
+
+provides:
+  apis:
+    - name: sap-s4-business-partner-mcp-server
+      kind: mcp-server
+      ordId: customer.build:apiResource:blocked-invoice-analyser-635d5.sap-s4-business-partner-mcp-server:v1
+
+requires:
+  - name: API_BUSINESS_PARTNER
+    kind: api
+    ordId: sap.s4:apiResource:API_BUSINESS_PARTNER:v1

@@ -1,0 +1,90 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Blocked Invoice Analyser",
+    "version": "1.0.0",
+    "description": "Accepts a supplier invoice number, retrieves related SAP data, and returns a plain-language explanation of why the invoice is blocked plus a recommended corrective action."
+  },
+  "paths": {
+    "/blocked-invoice-analyser-635d5/blocked-invoice-analyser-workflow/blocked-invoice-received": {
+      "post": {
+        "summary": "Analyse a blocked supplier invoice",
+        "description": "Triggers the blocked invoice analysis workflow. Provide a supplier invoice number; the workflow returns a plain-language block reason explanation and a recommended action.",
+        "operationId": "blockedInvoiceReceived",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["invoiceNumber"],
+                "properties": {
+                  "invoiceNumber": {
+                    "type": "string",
+                    "description": "The SAP supplier invoice number to analyse",
+                    "example": "5105600001"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Analysis completed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["invoiceNumber", "blockReasonExplanation", "recommendedAction"],
+                  "properties": {
+                    "invoiceNumber": {
+                      "type": "string",
+                      "description": "The invoice number that was analysed"
+                    },
+                    "blockReasonExplanation": {
+                      "type": "string",
+                      "description": "Plain-language explanation of why the invoice is blocked"
+                    },
+                    "recommendedAction": {
+                      "type": "string",
+                      "description": "Specific recommended next step for the accounts payable specialist"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or invalid request body — invoiceNumber is required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": { "type": "string" },
+                    "message": { "type": "string" }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Invoice not found in SAP",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "invoiceNumber": { "type": "string" },
+                    "message": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

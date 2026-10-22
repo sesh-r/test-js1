@@ -1,0 +1,538 @@
+{
+  "name": "blocked-invoice-analyser-workflow",
+  "description": "Webhook-triggered workflow that accepts a supplier invoice number, retrieves the invoice details, related purchase order, goods receipt, and vendor information from SAP S/4HANA, then uses an AI agent to explain the block reason and recommend a corrective action in plain language. Read-only. Returns a graceful message if the invoice is not found.",
+  "nodes": [
+    {
+      "id": "node-webhook",
+      "name": "Blocked Invoice Received",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        100,
+        300
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "blocked-invoice-analyser-635d5/blocked-invoice-analyser-workflow/blocked-invoice-received",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "node-validate",
+      "name": "Invoice Number Provided",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        380,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $('Blocked Invoice Received').item.json.body.invoiceNumber }}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "node-respond-400",
+      "name": "Respond Validation Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        660,
+        500
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"error\": \"Missing required field: invoiceNumber\", \"message\": \"Please provide an invoiceNumber in the request body.\"}",
+        "options": {
+          "responseCode": 400
+        }
+      }
+    },
+    {
+      "id": "node-get-invoice",
+      "name": "Get Supplier Invoice",
+      "type": "CUSTOM.sapMcpClient",
+      "typeVersion": 1,
+      "position": [
+        660,
+        280
+      ],
+      "parameters": {
+        "mcpServerName": "{\"ordId\":\"customer.build:apiResource:blocked-invoice-analyser-635d5.sap-s4-supplier-invoice-mcp-server:v1\",\"name\":\"sap-s4-supplier-invoice-mcp-server\"}",
+        "toolMode": "list",
+        "toolFromList": "{\"name\":\"list_a_supplierinvoice_for_api_supplierinvoice_process_srv\"}",
+        "inputMode": "manual",
+        "additionalOptions": {
+          "includeMetadata": false,
+          "timeout": 30000,
+          "continueOnFail": true
+        },
+        "mcpServers": "[{\"ordId\":\"customer.build:apiResource:blocked-invoice-analyser-635d5.sap-s4-supplier-invoice-mcp-server:v1\",\"name\":\"sap-s4-supplier-invoice-mcp-server\",\"description\":\"Exposes SAP S/4HANA Supplier Invoice API as read-only MCP tools\",\"tools\":[{\"name\":\"get_metadata_api_supplierinvoice_process_srv\",\"description\":\"Get metadata of the OData service.\"},{\"name\":\"batch_for_api_supplierinvoice_process_srv\",\"description\":\"Execute batch OData operations.\"},{\"name\":\"list_a_suplrinvcitempurordref\",\"description\":\"List A_SuplrInvcItemPurOrdRef entities.\"},{\"name\":\"get_a_suplrinvcitempurordref_for_api_supplierinvoice_process_srv\",\"description\":\"Get A_SuplrInvcItemPurOrdRef by key.\"},{\"name\":\"list_a_supplierinvoice_for_api_supplierinvoice_process_srv\",\"description\":\"List supplier invoices.\"},{\"name\":\"get_a_supplierinvoice_for_api_supplierinvoice_process_srv\",\"description\":\"Get supplier invoice by key.\"}]},{\"ordId\":\"customer.build:apiResource:blocked-invoice-analyser-635d5.sap-s4-purchase-order-mcp-server:v1\",\"name\":\"sap-s4-purchase-order-mcp-server\",\"description\":\"Exposes SAP S/4HANA Purchase Order API as read-only MCP tools\",\"tools\":[{\"name\":\"get_metadata_api_purchaseorder_process_srv\",\"description\":\"Get metadata.\"},{\"name\":\"batch_for_api_purchaseorder_process_srv\",\"description\":\"Batch.\"},{\"name\":\"list_a_purchaseorder_for_api_purchaseorder_process_srv\",\"description\":\"List purchase orders.\"},{\"name\":\"get_a_purchaseorder_for_api_purchaseorder_process_srv\",\"description\":\"Get purchase order by key.\"},{\"name\":\"list_a_purchaseorderitem_for_api_purchaseorder_process_srv\",\"description\":\"List purchase order items.\"},{\"name\":\"get_a_purchaseorderitem_for_api_purchaseorder_process_srv\",\"description\":\"Get purchase order item by key.\"}]},{\"ordId\":\"customer.build:apiResource:blocked-invoice-analyser-635d5.sap-s4-goods-receipt-mcp-server:v1\",\"name\":\"sap-s4-goods-receipt-mcp-server\",\"description\":\"Exposes SAP S/4HANA Goods Receipt API as read-only MCP tools\",\"tools\":[{\"name\":\"get_metadata_sap_self\",\"description\":\"Get metadata.\"},{\"name\":\"batch_for_sap_self\",\"description\":\"Batch.\"},{\"name\":\"list_a_sspopenitemgoodsreceipt_for_sap_self\",\"description\":\"List goods receipts.\"},{\"name\":\"get_a_sspopenitemgoodsreceipt_for_sap_self\",\"description\":\"Get goods receipt by key.\"}]},{\"ordId\":\"customer.build:apiResource:blocked-invoice-analyser-635d5.sap-s4-business-partner-mcp-server:v1\",\"name\":\"sap-s4-business-partner-mcp-server\",\"description\":\"Exposes SAP S/4HANA Business Partner API as read-only MCP tools\",\"tools\":[{\"name\":\"get_metadata_api_business_partner\",\"description\":\"Get metadata.\"},{\"name\":\"batch_for_api_business_partner\",\"description\":\"Batch.\"},{\"name\":\"list_a_businesspartner_for_api_business_partner\",\"description\":\"List business partners.\"},{\"name\":\"get_a_businesspartner_for_api_business_partner\",\"description\":\"Get business partner by key.\"}]}]",
+        "manualArguments": {
+          "values": [
+            {
+              "name": "filter",
+              "value": "={{ \"SupplierInvoice eq '\" + $('Blocked Invoice Received').item.json.body.invoiceNumber + \"'\" }}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "node-check-found",
+      "name": "Invoice Found in SAP",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        940,
+        280
+      ],
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ (() => { const r = $('Get Supplier Invoice').item.json.result; if (!r || r.isError) return ''; try { const parsed = typeof r === 'string' ? JSON.parse(r) : r; const text = parsed?.content?.[0]?.text || ''; const data = typeof text === 'string' ? JSON.parse(text) : text; return (data?.value?.length > 0 || data?.d?.results?.length > 0) ? 'found' : ''; } catch(e) { return ''; } })() }}",
+              "operation": "equal",
+              "value2": "found"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "node-respond-404",
+      "name": "Respond Invoice Not Found",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1220,
+        480
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ invoiceNumber: $('Blocked Invoice Received').item.json.body.invoiceNumber, message: 'Invoice ' + $('Blocked Invoice Received').item.json.body.invoiceNumber + ' was not found in SAP. Please verify the invoice number and try again.' }) }}",
+        "options": {
+          "responseCode": 404
+        }
+      }
+    },
+    {
+      "id": "node-get-po",
+      "name": "Get Purchase Order",
+      "type": "CUSTOM.sapMcpClient",
+      "typeVersion": 1,
+      "position": [
+        1220,
+        240
+      ],
+      "parameters": {
+        "mcpServerName": "{\"ordId\":\"customer.build:apiResource:blocked-invoice-analyser-635d5.sap-s4-purchase-order-mcp-server:v1\",\"name\":\"sap-s4-purchase-order-mcp-server\"}",
+        "toolMode": "list",
+        "toolFromList": "{\"name\":\"list_a_purchaseorder_for_api_purchaseorder_process_srv\"}",
+        "inputMode": "manual",
+        "additionalOptions": {
+          "includeMetadata": false,
+          "timeout": 30000,
+          "continueOnFail": true
+        },
+        "mcpServers": "[{\"ordId\":\"customer.build:apiResource:blocked-invoice-analyser-635d5.sap-s4-supplier-invoice-mcp-server:v1\",\"name\":\"sap-s4-supplier-invoice-mcp-server\",\"description\":\"Supplier Invoice MCP\",\"tools\":[{\"name\":\"list_a_supplierinvoice_for_api_supplierinvoice_process_srv\",\"description\":\"List supplier invoices.\"},{\"name\":\"get_a_supplierinvoice_for_api_supplierinvoice_process_srv\",\"description\":\"Get supplier invoice by key.\"},{\"name\":\"get_metadata_api_supplierinvoice_process_srv\",\"description\":\"Get metadata.\"},{\"name\":\"batch_for_api_supplierinvoice_process_srv\",\"description\":\"Batch.\"}]},{\"ordId\":\"customer.build:apiResource:blocked-invoice-analyser-635d5.sap-s4-purchase-order-mcp-server:v1\",\"name\":\"sap-s4-purchase-order-mcp-server\",\"description\":\"Purchase Order MCP\",\"tools\":[{\"name\":\"list_a_purchaseorder_for_api_purchaseorder_process_srv\",\"description\":\"List purchase orders.\"},{\"name\":\"get_a_purchaseorder_for_api_purchaseorder_process_srv\",\"description\":\"Get purchase order by key.\"},{\"name\":\"get_metadata_api_purchaseorder_process_srv\",\"description\":\"Get metadata.\"},{\"name\":\"batch_for_api_purchaseorder_process_srv\",\"description\":\"Batch.\"}]},{\"ordId\":\"customer.build:apiResource:blocked-invoice-analyser-635d5.sap-s4-goods-receipt-mcp-server:v1\",\"name\":\"sap-s4-goods-receipt-mcp-server\",\"description\":\"Goods Receipt MCP\",\"tools\":[{\"name\":\"list_a_sspopenitemgoodsreceipt_for_sap_self\",\"description\":\"List goods receipts.\"},{\"name\":\"get_a_sspopenitemgoodsreceipt_for_sap_self\",\"description\":\"Get goods receipt by key.\"},{\"name\":\"get_metadata_sap_self\",\"description\":\"Get metadata.\"},{\"name\":\"batch_for_sap_self\",\"description\":\"Batch.\"}]},{\"ordId\":\"customer.build:apiResource:blocked-invoice-analyser-635d5.sap-s4-business-partner-mcp-server:v1\",\"name\":\"sap-s4-business-partner-mcp-server\",\"description\":\"Business Partner MCP\",\"tools\":[{\"name\":\"list_a_businesspartner_for_api_business_partner\",\"description\":\"List business partners.\"},{\"name\":\"get_a_businesspartner_for_api_business_partner\",\"description\":\"Get business partner by key.\"},{\"name\":\"get_metadata_api_business_partner\",\"description\":\"Get metadata.\"},{\"name\":\"batch_for_api_business_partner\",\"description\":\"Batch.\"}]}]",
+        "manualArguments": {
+          "values": [
+            {
+              "name": "filter",
+              "value": "={{ (() => { try { const r = $('Get Supplier Invoice').item.json.result; const text = (typeof r === 'string' ? JSON.parse(r) : r)?.content?.[0]?.text || ''; const data = typeof text === 'string' ? JSON.parse(text) : text; const inv = data?.value?.[0] || data?.d?.results?.[0] || {}; const po = inv.PurchaseOrder || ''; return po ? \"PurchaseOrder eq '\" + po + \"'\" : \"PurchaseOrder eq 'UNKNOWN'\"; } catch(e) { return \"PurchaseOrder eq 'UNKNOWN'\"; } })() }}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "node-get-gr",
+      "name": "Get Goods Receipt",
+      "type": "CUSTOM.sapMcpClient",
+      "typeVersion": 1,
+      "position": [
+        1500,
+        240
+      ],
+      "parameters": {
+        "mcpServerName": "{\"ordId\":\"customer.build:apiResource:blocked-invoice-analyser-635d5.sap-s4-goods-receipt-mcp-server:v1\",\"name\":\"sap-s4-goods-receipt-mcp-server\"}",
+        "toolMode": "list",
+        "toolFromList": "{\"name\":\"list_a_sspopenitemgoodsreceipt_for_sap_self\"}",
+        "inputMode": "manual",
+        "additionalOptions": {
+          "includeMetadata": false,
+          "timeout": 30000,
+          "continueOnFail": true
+        },
+        "mcpServers": "[{\"ordId\":\"customer.build:apiResource:blocked-invoice-analyser-635d5.sap-s4-supplier-invoice-mcp-server:v1\",\"name\":\"sap-s4-supplier-invoice-mcp-server\",\"description\":\"Supplier Invoice MCP\",\"tools\":[{\"name\":\"list_a_supplierinvoice_for_api_supplierinvoice_process_srv\",\"description\":\"List supplier invoices.\"},{\"name\":\"get_a_supplierinvoice_for_api_supplierinvoice_process_srv\",\"description\":\"Get by key.\"},{\"name\":\"get_metadata_api_supplierinvoice_process_srv\",\"description\":\"Get metadata.\"},{\"name\":\"batch_for_api_supplierinvoice_process_srv\",\"description\":\"Batch.\"}]},{\"ordId\":\"customer.build:apiResource:blocked-invoice-analyser-635d5.sap-s4-purchase-order-mcp-server:v1\",\"name\":\"sap-s4-purchase-order-mcp-server\",\"description\":\"Purchase Order MCP\",\"tools\":[{\"name\":\"list_a_purchaseorder_for_api_purchaseorder_process_srv\",\"description\":\"List purchase orders.\"},{\"name\":\"get_a_purchaseorder_for_api_purchaseorder_process_srv\",\"description\":\"Get by key.\"},{\"name\":\"get_metadata_api_purchaseorder_process_srv\",\"description\":\"Get metadata.\"},{\"name\":\"batch_for_api_purchaseorder_process_srv\",\"description\":\"Batch.\"}]},{\"ordId\":\"customer.build:apiResource:blocked-invoice-analyser-635d5.sap-s4-goods-receipt-mcp-server:v1\",\"name\":\"sap-s4-goods-receipt-mcp-server\",\"description\":\"Goods Receipt MCP\",\"tools\":[{\"name\":\"list_a_sspopenitemgoodsreceipt_for_sap_self\",\"description\":\"List goods receipts.\"},{\"name\":\"get_a_sspopenitemgoodsreceipt_for_sap_self\",\"description\":\"Get by key.\"},{\"name\":\"get_metadata_sap_self\",\"description\":\"Get metadata.\"},{\"name\":\"batch_for_sap_self\",\"description\":\"Batch.\"}]},{\"ordId\":\"customer.build:apiResource:blocked-invoice-analyser-635d5.sap-s4-business-partner-mcp-server:v1\",\"name\":\"sap-s4-business-partner-mcp-server\",\"description\":\"Business Partner MCP\",\"tools\":[{\"name\":\"list_a_businesspartner_for_api_business_partner\",\"description\":\"List business partners.\"},{\"name\":\"get_a_businesspartner_for_api_business_partner\",\"description\":\"Get by key.\"},{\"name\":\"get_metadata_api_business_partner\",\"description\":\"Get metadata.\"},{\"name\":\"batch_for_api_business_partner\",\"description\":\"Batch.\"}]}]",
+        "manualArguments": {
+          "values": [
+            {
+              "name": "filter",
+              "value": "={{ (() => { try { const r = $('Get Purchase Order').item.json.result; const text = (typeof r === 'string' ? JSON.parse(r) : r)?.content?.[0]?.text || ''; const data = typeof text === 'string' ? JSON.parse(text) : text; const po = data?.value?.[0] || data?.d?.results?.[0] || {}; const poNum = po.PurchaseOrder || ''; return poNum ? \"PurchaseOrder eq '\" + poNum + \"'\" : \"PurchaseOrder eq 'UNKNOWN'\"; } catch(e) { return \"PurchaseOrder eq 'UNKNOWN'\"; } })() }}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "node-get-vendor",
+      "name": "Get Vendor Details",
+      "type": "CUSTOM.sapMcpClient",
+      "typeVersion": 1,
+      "position": [
+        1780,
+        240
+      ],
+      "parameters": {
+        "mcpServerName": "{\"ordId\":\"customer.build:apiResource:blocked-invoice-analyser-635d5.sap-s4-business-partner-mcp-server:v1\",\"name\":\"sap-s4-business-partner-mcp-server\"}",
+        "toolMode": "list",
+        "toolFromList": "{\"name\":\"get_a_businesspartner_for_api_business_partner\"}",
+        "inputMode": "manual",
+        "additionalOptions": {
+          "includeMetadata": false,
+          "timeout": 30000,
+          "continueOnFail": true
+        },
+        "mcpServers": "[{\"ordId\":\"customer.build:apiResource:blocked-invoice-analyser-635d5.sap-s4-supplier-invoice-mcp-server:v1\",\"name\":\"sap-s4-supplier-invoice-mcp-server\",\"description\":\"Supplier Invoice MCP\",\"tools\":[{\"name\":\"list_a_supplierinvoice_for_api_supplierinvoice_process_srv\",\"description\":\"List supplier invoices.\"},{\"name\":\"get_a_supplierinvoice_for_api_supplierinvoice_process_srv\",\"description\":\"Get by key.\"},{\"name\":\"get_metadata_api_supplierinvoice_process_srv\",\"description\":\"Get metadata.\"},{\"name\":\"batch_for_api_supplierinvoice_process_srv\",\"description\":\"Batch.\"}]},{\"ordId\":\"customer.build:apiResource:blocked-invoice-analyser-635d5.sap-s4-purchase-order-mcp-server:v1\",\"name\":\"sap-s4-purchase-order-mcp-server\",\"description\":\"Purchase Order MCP\",\"tools\":[{\"name\":\"list_a_purchaseorder_for_api_purchaseorder_process_srv\",\"description\":\"List purchase orders.\"},{\"name\":\"get_a_purchaseorder_for_api_purchaseorder_process_srv\",\"description\":\"Get by key.\"},{\"name\":\"get_metadata_api_purchaseorder_process_srv\",\"description\":\"Get metadata.\"},{\"name\":\"batch_for_api_purchaseorder_process_srv\",\"description\":\"Batch.\"}]},{\"ordId\":\"customer.build:apiResource:blocked-invoice-analyser-635d5.sap-s4-goods-receipt-mcp-server:v1\",\"name\":\"sap-s4-goods-receipt-mcp-server\",\"description\":\"Goods Receipt MCP\",\"tools\":[{\"name\":\"list_a_sspopenitemgoodsreceipt_for_sap_self\",\"description\":\"List goods receipts.\"},{\"name\":\"get_a_sspopenitemgoodsreceipt_for_sap_self\",\"description\":\"Get by key.\"},{\"name\":\"get_metadata_sap_self\",\"description\":\"Get metadata.\"},{\"name\":\"batch_for_sap_self\",\"description\":\"Batch.\"}]},{\"ordId\":\"customer.build:apiResource:blocked-invoice-analyser-635d5.sap-s4-business-partner-mcp-server:v1\",\"name\":\"sap-s4-business-partner-mcp-server\",\"description\":\"Business Partner MCP\",\"tools\":[{\"name\":\"list_a_businesspartner_for_api_business_partner\",\"description\":\"List business partners.\"},{\"name\":\"get_a_businesspartner_for_api_business_partner\",\"description\":\"Get by key.\"},{\"name\":\"get_metadata_api_business_partner\",\"description\":\"Get metadata.\"},{\"name\":\"batch_for_api_business_partner\",\"description\":\"Batch.\"}]}]",
+        "manualArguments": {
+          "values": [
+            {
+              "name": "BusinessPartner",
+              "value": "={{ (() => { try { const r = $('Get Supplier Invoice').item.json.result; const text = (typeof r === 'string' ? JSON.parse(r) : r)?.content?.[0]?.text || ''; const data = typeof text === 'string' ? JSON.parse(text) : text; const inv = data?.value?.[0] || data?.d?.results?.[0] || {}; return inv.InvoicingParty || inv.Supplier || 'UNKNOWN'; } catch(e) { return 'UNKNOWN'; } })() }}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "node-sticky-agent",
+      "name": "Sticky Note - Agent Config",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2060,
+        80
+      ],
+      "parameters": {
+        "content": "\u26a0\ufe0f Agent not configured \u2014 select the target agent in this node before deploying the workflow.",
+        "height": 120,
+        "width": 340,
+        "color": 3
+      }
+    },
+    {
+      "id": "node-agent",
+      "name": "Analyse Block Reason",
+      "type": "CUSTOM.sapAgent",
+      "typeVersion": 1,
+      "position": [
+        2060,
+        240
+      ],
+      "parameters": {
+        "agents": "[{\"ordId\":\"customer.build:agent:blocked-invoice-analyser-635d5.blocked-invoice-analyser-agent:v1\",\"name\":\"Blocked Invoice Analyser Agent\",\"description\":\"Analyses blocked supplier invoices and provides plain-language explanations\"}]",
+        "agentName": "{\"ordId\":\"customer.build:agent:blocked-invoice-analyser-635d5.blocked-invoice-analyser-agent:v1\",\"name\":\"Blocked Invoice Analyser Agent\"}",
+        "chatInput": "={{ (() => { const invoiceNum = $('Blocked Invoice Received').item.json.body.invoiceNumber; const invResult = $('Get Supplier Invoice').item.json.result; const poResult = $('Get Purchase Order').item.json.result; const grResult = $('Get Goods Receipt').item.json.result; const bpResult = $('Get Vendor Details').item.json.result; const extractText = r => { try { const parsed = typeof r === 'string' ? JSON.parse(r) : r; return parsed?.content?.[0]?.text || JSON.stringify(r); } catch(e) { return String(r || 'No data available'); } }; return 'You are an accounts payable specialist assistant. Analyse why supplier invoice ' + invoiceNum + ' is blocked in SAP and provide a clear explanation and recommended action.\\n\\nINVOICE DATA:\\n' + extractText(invResult) + '\\n\\nPURCHASE ORDER DATA:\\n' + extractText(poResult) + '\\n\\nGOODS RECEIPT DATA:\\n' + extractText(grResult) + '\\n\\nVENDOR / BUSINESS PARTNER DATA:\\n' + extractText(bpResult) + '\\n\\nBased on the above data:\\n1. Explain in plain language (no SAP codes or jargon) why this invoice is blocked. Reference specific data points such as quantity mismatches, price variances, or missing goods receipts.\\n2. Provide a specific, actionable recommended next step for the accounts payable specialist.\\n3. If the data is insufficient for a confident diagnosis, clearly state that a manual review is required and explain what information is missing.\\n4. Do NOT suggest or imply any changes to SAP data \u2014 this analysis is read-only and advisory only.\\n\\nRespond in this exact JSON format:\\n{\"blockReasonExplanation\": \"<plain-language explanation>\", \"recommendedAction\": \"<specific action to take>\"}'; })() }}",
+        "sessionId": "={{ $('Blocked Invoice Received').item.json.body.invoiceNumber }}",
+        "blocking": true,
+        "additionalOptions": {}
+      }
+    },
+    {
+      "id": "node-check-agent",
+      "name": "Agent Responded Successfully",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        2340,
+        240
+      ],
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $('Analyse Block Reason').item.json.success }}",
+              "operation": "equal",
+              "value2": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "node-respond-200",
+      "name": "Respond with Analysis",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        2620,
+        180
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ (() => { const invoiceNum = $('Blocked Invoice Received').item.json.body.invoiceNumber; const agentResponse = $('Analyse Block Reason').item.json.response; let explanation = ''; let recommendation = ''; try { const parsed = typeof agentResponse === 'string' ? JSON.parse(agentResponse) : agentResponse; explanation = parsed?.blockReasonExplanation || String(agentResponse); recommendation = parsed?.recommendedAction || 'Please review the invoice manually.'; } catch(e) { explanation = String(agentResponse || 'Analysis completed. Please review the details.'); recommendation = 'Please review the invoice manually.'; } return JSON.stringify({ invoiceNumber: invoiceNum, blockReasonExplanation: explanation, recommendedAction: recommendation }); })() }}",
+        "options": {
+          "responseCode": 200
+        }
+      }
+    },
+    {
+      "id": "node-respond-500",
+      "name": "Respond Agent Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        2620,
+        360
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ invoiceNumber: $('Blocked Invoice Received').item.json.body.invoiceNumber, error: 'The analysis could not be completed at this time. Please try again or review the invoice manually.', blockReasonExplanation: 'Automated analysis unavailable.', recommendedAction: 'Please review invoice ' + $('Blocked Invoice Received').item.json.body.invoiceNumber + ' manually in SAP.' }) }}",
+        "options": {
+          "responseCode": 500
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Blocked Invoice Received": {
+      "main": [
+        [
+          {
+            "node": "Invoice Number Provided",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Invoice Number Provided": {
+      "main": [
+        [
+          {
+            "node": "Get Supplier Invoice",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Validation Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Supplier Invoice": {
+      "main": [
+        [
+          {
+            "node": "Invoice Found in SAP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Invoice Found in SAP": {
+      "main": [
+        [
+          {
+            "node": "Get Purchase Order",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Invoice Not Found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Purchase Order": {
+      "main": [
+        [
+          {
+            "node": "Get Goods Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Goods Receipt": {
+      "main": [
+        [
+          {
+            "node": "Get Vendor Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Vendor Details": {
+      "main": [
+        [
+          {
+            "node": "Analyse Block Reason",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyse Block Reason": {
+      "main": [
+        [
+          {
+            "node": "Agent Responded Successfully",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agent Responded Successfully": {
+      "main": [
+        [
+          {
+            "node": "Respond with Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Agent Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {
+    "Get Supplier Invoice": [
+      {
+        "success": true,
+        "requestId": "req-test-001",
+        "tool": "list_a_supplierinvoice_for_api_supplierinvoice_process_srv",
+        "mcpServer": {
+          "name": "sap-s4-supplier-invoice-mcp-server",
+          "ordId": "customer.build:apiResource:blocked-invoice-analyser-635d5.sap-s4-supplier-invoice-mcp-server:v1",
+          "globalTenantId": null
+        },
+        "result": {
+          "isError": false,
+          "content": [
+            {
+              "type": "text",
+              "text": "{\"value\":[{\"SupplierInvoice\":\"5105600001\",\"FiscalYear\":\"2026\",\"InvoicingParty\":\"10300001\",\"PurchaseOrder\":\"4500000001\",\"PaymentBlockingReason\":\"R\",\"CompanyCode\":\"1000\",\"DocumentDate\":\"2026-10-01\",\"InvoiceGrossAmount\":\"10000.00\",\"DocumentCurrency\":\"EUR\"}]}"
+            }
+          ],
+          "structuredContent": null
+        },
+        "timestamp": "2026-10-19T12:00:00.000Z"
+      }
+    ],
+    "Get Purchase Order": [
+      {
+        "success": true,
+        "requestId": "req-test-002",
+        "tool": "list_a_purchaseorder_for_api_purchaseorder_process_srv",
+        "mcpServer": {
+          "name": "sap-s4-purchase-order-mcp-server",
+          "ordId": "customer.build:apiResource:blocked-invoice-analyser-635d5.sap-s4-purchase-order-mcp-server:v1",
+          "globalTenantId": null
+        },
+        "result": {
+          "isError": false,
+          "content": [
+            {
+              "type": "text",
+              "text": "{\"value\":[{\"PurchaseOrder\":\"4500000001\",\"Supplier\":\"10300001\",\"PurchaseOrderDate\":\"2026-09-01\",\"CompanyCode\":\"1000\",\"TotalNetAmount\":\"9500.00\",\"DocumentCurrency\":\"EUR\"}]}"
+            }
+          ],
+          "structuredContent": null
+        },
+        "timestamp": "2026-10-19T12:00:01.000Z"
+      }
+    ],
+    "Get Goods Receipt": [
+      {
+        "success": true,
+        "requestId": "req-test-003",
+        "tool": "list_a_sspopenitemgoodsreceipt_for_sap_self",
+        "mcpServer": {
+          "name": "sap-s4-goods-receipt-mcp-server",
+          "ordId": "customer.build:apiResource:blocked-invoice-analyser-635d5.sap-s4-goods-receipt-mcp-server:v1",
+          "globalTenantId": null
+        },
+        "result": {
+          "isError": false,
+          "content": [
+            {
+              "type": "text",
+              "text": "{\"value\":[{\"PurchaseOrder\":\"4500000001\",\"GoodsReceiptQuantity\":\"90\",\"OrderQuantity\":\"100\",\"OpenQuantity\":\"10\",\"PostingDate\":\"2026-09-20\"}]}"
+            }
+          ],
+          "structuredContent": null
+        },
+        "timestamp": "2026-10-19T12:00:02.000Z"
+      }
+    ],
+    "Get Vendor Details": [
+      {
+        "success": true,
+        "requestId": "req-test-004",
+        "tool": "get_a_businesspartner_for_api_business_partner",
+        "mcpServer": {
+          "name": "sap-s4-business-partner-mcp-server",
+          "ordId": "customer.build:apiResource:blocked-invoice-analyser-635d5.sap-s4-business-partner-mcp-server:v1",
+          "globalTenantId": null
+        },
+        "result": {
+          "isError": false,
+          "content": [
+            {
+              "type": "text",
+              "text": "{\"BusinessPartner\":\"10300001\",\"BusinessPartnerName\":\"Acme Supplies GmbH\",\"PaymentTerms\":\"NT30\",\"IsBlockedForPosting\":false,\"Currency\":\"EUR\"}"
+            }
+          ],
+          "structuredContent": null
+        },
+        "timestamp": "2026-10-19T12:00:03.000Z"
+      }
+    ],
+    "Analyse Block Reason": [
+      {
+        "success": true,
+        "agentName": "Blocked Invoice Analyser Agent",
+        "ordId": "customer.build:agent:blocked-invoice-analyser-635d5.blocked-invoice-analyser-agent:v1",
+        "globalTenantId": null,
+        "messageId": "msg-test-001",
+        "sessionId": "5105600001",
+        "blocking": true,
+        "response": "{\"blockReasonExplanation\": \"Invoice 5105600001 is blocked because the invoiced quantity exceeds the quantity actually received. SAP has automatically placed a quantity-based payment block to prevent overpayment until the remaining units are delivered or the invoice is adjusted.\", \"recommendedAction\": \"Contact vendor Acme Supplies GmbH to arrange delivery of outstanding units or request a credit memo to match the received quantity.\"}",
+        "timestamp": "2026-10-19T12:00:05.000Z"
+      }
+    ]
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

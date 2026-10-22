@@ -1,0 +1,14 @@
+apiVersion: solution.sap/v1
+kind: Solution
+
+metadata:
+  name: blocked-invoice-analyser-635d5
+  version: "1.0.0"
+  description: Automated workflow that retrieves blocked supplier invoice data from SAP S/4HANA and uses an AI agent to explain the block reason and recommend a corrective action in plain language
+
+assets:
+  - ref: ./assets/sap-s4-supplier-invoice-mcp-server/asset.yaml
+  - ref: ./assets/sap-s4-purchase-order-mcp-server/asset.yaml
+  - ref: ./assets/sap-s4-goods-receipt-mcp-server/asset.yaml
+  - ref: ./assets/sap-s4-business-partner-mcp-server/asset.yaml
+  - ref: ./assets/workflows/blocked-invoice-analyser-workflow/asset.yaml
